@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=../schema.json
+blocks:
+  confirmations: 3
+  estimateBlockTime: 6
+  reorgPeriod: finalized
+chainId: 222222
+displayName: Hydration
+domainId: 222222
+isTestnet: false
+name: hydration
+nativeToken:
+  decimals: 18
+  name: Wrapped Ether
+  symbol: WETH
+protocol: ethereum
+rpcUrls:
+  - http: https://hydration-rpc.n.dwellir.com
+  - http: https://hydration.dotters.network
+  - http: https://hydration.ibp.network
+technicalStack: polkadotsubstrate
