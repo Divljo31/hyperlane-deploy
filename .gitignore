@@ -4,3 +4,10 @@
 *.pem
 node_modules/
 .DS_Store
+
+# strategy.yaml contains private keys
+configs/strategy.yaml
+strategy.yaml
+
+hyperlane_db_relayer/
+generated/

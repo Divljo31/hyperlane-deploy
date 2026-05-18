@@ -1,10 +1,10 @@
 # hyperlane-deploy
 
-Hyperlane core deployment for **Hydration** — chain ID `222222`, Frontier EVM on a Polkadot parachain.
+Hyperlane core deployment for **Lark** — Hydration's testnet parachain (chain ID `222222`, Frontier EVM). This deployment is a dress rehearsal before deploying the same setup to Hydration mainnet.
 
 This repo holds:
 
-- `chains/hydration/` — Hyperlane registry entry (copy into `~/.hyperlane/chains/` in step 2)
+- `chains/lark/` — Hyperlane registry entry (copy into `~/.hyperlane/chains/` in step 2)
 - `configs/core-config.yaml` — owner / ISM / hook config consumed by `hyperlane core deploy`
 
 For the full production roadmap (validators, relayer, ISM hardening, registry PR) see [PRODUCTION.md](./PRODUCTION.md).
@@ -15,10 +15,10 @@ For the full production roadmap (validators, relayer, ISM hardening, registry PR
 
 | | |
 |---|---|
-| `chains/hydration/metadata.yaml` | done |
+| `chains/lark/metadata.yaml` | done |
 | `configs/core-config.yaml` | done — edit `owner` fields in step 3 if you're not the original deployer |
-| `chains/hydration/addresses.yaml` | written by `hyperlane core deploy` in step 6 |
-| Smoke test | step 7 — Hydration ↔ Ethereum round trip |
+| `chains/lark/addresses.yaml` | written by `hyperlane core deploy` in step 6 |
+| Smoke test | step 7 — Lark ↔ Ethereum round trip |
 | Canonical registry PR | see PRODUCTION.md phase 5 |
 
 ---
@@ -27,7 +27,7 @@ For the full production roadmap (validators, relayer, ISM hardening, registry PR
 
 | Field | Value | Why |
 |---|---|---|
-| `nativeToken` | `WETH / 18` | Hydration's `pallet_evm::Config::Currency = WethCurrency`. `eth_getBalance` and `msg.value` are denominated in WETH, not HDX. |
+| `nativeToken` | `WETH / 18` | Lark's `pallet_evm::Config::Currency = WethCurrency`. `eth_getBalance` and `msg.value` are denominated in WETH, not HDX. |
 | `technicalStack` | `polkadotsubstrate` | Same flag Moonbeam / Astar / Acala use for Frontier-based chains. |
 | `blocks.reorgPeriod` | `finalized` | Use the relay-chain finality tag, not a block count. |
 | `blockExplorers` | omitted | Subscan is Cloudflare-gated and not Etherscan-compatible; required `apiUrl` field can't be filled. Block explorer can be added post-deploy. |
@@ -41,8 +41,7 @@ For the full production roadmap (validators, relayer, ISM hardening, registry PR
 
 - **Node.js ≥ 18** and the Hyperlane CLI: `npm i -g @hyperlane-xyz/cli`
 - **Deployer EOA private key** (you'll paste it as `HYP_KEY` in step 5)
-- **≥ 0.01 WETH** on the deployer EOA at the Hydration EVM. Bridge from Ethereum via Snowbridge or transfer from a Hydration account holding asset id `20`.
-- A small amount of **ETH on Ethereum mainnet** for the smoke test (the ephemeral relayer pays delivery gas there)
+- **≥ 0.01 WETH** on the deployer EOA at the Lark EVM. Source WETH from the testnet faucet / Lark sudo or transfer from a Lark account holding asset id `20`.
 
 ---
 
@@ -61,13 +60,13 @@ Copy the chain folder into `~/.hyperlane/chains/` as a real directory. The CLI's
 
 ```bash
 mkdir -p ~/.hyperlane/chains
-cp -R chains/hydration ~/.hyperlane/chains/hydration
+cp -R chains/lark ~/.hyperlane/chains/lark
 ```
 
 Verify the chain is now discoverable:
 
 ```bash
-hyperlane registry list | grep hydration   # should print: hydration | 'Hydration' | 222222
+hyperlane registry list | grep lark   # should print: lark | 'Lark' | 222222
 ```
 
 ### 3. Set the owner address in `core-config.yaml`
@@ -95,7 +94,7 @@ Use the same address in all five places for the initial deploy. PRODUCTION.md ph
 
 ```bash
 DEPLOYER=0xYourDeployerAddress
-curl -s https://hydration.dotters.network -H 'content-type: application/json' \
+curl -s https://node3.lark.hydration.cloud -H 'content-type: application/json' \
   -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBalance\",\"params\":[\"$DEPLOYER\",\"latest\"],\"id\":1}" \
   | python3 -c 'import sys,json; r=json.load(sys.stdin); print(int(r["result"],16)/1e18, "WETH")'
 ```
@@ -115,7 +114,7 @@ export HYP_KEY
 ### 6. Deploy core contracts
 
 ```bash
-hyperlane core deploy --chain hydration
+hyperlane core deploy --chain lark
 ```
 
 Takes 2-5 minutes. Deploys ~12 contracts in sequence:
@@ -126,56 +125,176 @@ Takes 2-5 minutes. Deploys ~12 contracts in sequence:
 - `interchainAccountRouter`, `interchainAccountIsm`
 - `validatorAnnounce`, `testRecipient`
 
-On success, addresses land in `~/.hyperlane/chains/hydration/addresses.yaml`. Copy them back into the repo before committing:
+On success, addresses land in `~/.hyperlane/chains/lark/addresses.yaml`. Copy them back into the repo before committing:
 
 ```bash
-cp ~/.hyperlane/chains/hydration/addresses.yaml chains/hydration/addresses.yaml
+cp ~/.hyperlane/chains/lark/addresses.yaml chains/lark/addresses.yaml
 ```
 
 Inspect:
 
 ```bash
-hyperlane core read --chain hydration
-cat chains/hydration/addresses.yaml
+hyperlane core read --chain lark
+cat chains/lark/addresses.yaml
 ```
 
 Owner, ISM, hooks, and beneficiary should match what you set in step 3.
 
-### 7. Smoke test
+### 7. Smoke test (Lark → Lark loopback)
 
-Send a message Hydration → Ethereum with an ephemeral relayer:
+Hyperlane's canonical relayer infrastructure doesn't know about Lark, so we can't send a message to Ethereum or any other public chain from a Lark deploy without running our own agents. The simplest smoke test is a self-addressed message — Lark dispatches, Lark's own testRecipient receives, ephemeral relayer delivers locally.
 
 ```bash
-hyperlane send message --origin hydration --destination ethereum --relay
+hyperlane send message --origin lark --destination lark --relay
 ```
 
-Expect: dispatched tx hash on Hydration, delivered tx hash on Ethereum, message ID printed.
+Expect: dispatched tx hash + delivered tx hash, both on Lark, plus a message ID.
 
 Check status separately if needed:
 
 ```bash
-hyperlane status --origin hydration --destination ethereum --id <messageId>
+hyperlane status --origin lark --destination lark --id <messageId>
 ```
+
+For a full inter-chain test (Lark ↔ another chain with continuous delivery) you'd run local validator + relayer agents — see the [deploy-hyperlane-with-local-agents](https://docs.hyperlane.xyz/docs/guides/chains/deploy-hyperlane-with-local-agents) guide.
 
 ### 8. Commit deploy artifacts
 
 ```bash
-git add chains/hydration/addresses.yaml configs/core-config.yaml
-git commit -m "Deploy Hyperlane core on Hydration mainnet"
+git add chains/lark/addresses.yaml configs/core-config.yaml
+git commit -m "Deploy Hyperlane core on Lark testnet"
 git push
 ```
 
 ---
 
-## After a successful deploy
+## Going to production
 
-Phase 1 + 2 are done. To make the bridge production-grade, continue with [PRODUCTION.md](./PRODUCTION.md):
+The Lark deploy above is intentionally insecure: single EOA owner, single trusted relayer. The path from there to a hardened mainnet (Hydration) bridge is ten ordered steps. Full detail in [PRODUCTION.md](./PRODUCTION.md); summary below.
 
-- Run your own validators (4a)
-- Run your own relayer (4b)
-- Switch the default ISM from trusted-relayer to multisig (4c)
-- Transfer ownership to a Gnosis Safe (4d)
-- Submit Hydration to the canonical hyperlane-registry (phase 5)
+**Critical ordering:** steps 4 → 5 → 6 → 7 must run in that order. You can't switch to a multisig ISM before validators exist, and you don't want to hand ownership to a Safe until you've confirmed `core apply` flows work with the deployer EOA — once the Safe owns the Mailbox, every config change becomes a multi-sig ceremony.
+
+### Step 0 — Prep mainnet inputs
+
+- Create `chains/hydration/` as a mirror of [chains/lark/](./chains/lark/). Adjust `chainId`, `domainId` (must be globally unique — testnet reuses 222222, mainnet needs its own), and RPC URLs.
+- Fund the deployer EOA with ≥ 0.01 WETH on Hydration EVM.
+- Copy [configs/core-config.yaml](./configs/core-config.yaml). Keep `trustedRelayerIsm` for the initial deploy — you swap it in step 6.
+
+### Step 1 — Core deploy on Hydration
+
+Same flow as Lark (steps 1–6 above):
+
+```bash
+cp -R chains/hydration ~/.hyperlane/chains/hydration
+export HYP_KEY=...
+hyperlane core deploy --chain hydration
+cp ~/.hyperlane/chains/hydration/addresses.yaml chains/hydration/addresses.yaml
+```
+
+Outcome: Mailbox + factories + ICA router + ValidatorAnnounce on Hydration mainnet, owned by the deployer EOA, with `trustedRelayerIsm` as default.
+
+### Step 2 — Smoke test
+
+```bash
+hyperlane send message --origin hydration --destination ethereum --relay
+```
+
+`--relay` runs an ephemeral relayer using `HYP_KEY`. Confirms the deploy works end-to-end before real assets are bridged.
+
+### Step 3 — Warp route(s) deploy (optional)
+
+Only if you're bridging a specific token (HOLLAR, HDX-as-ERC20, USDC, …). Same pattern as the existing [configs/warp-routes/WETH-lark-basesepolia.yaml](./configs/warp-routes/WETH-lark-basesepolia.yaml):
+
+```bash
+hyperlane warp init       # picks native/collateral/synthetic per chain
+hyperlane warp deploy
+hyperlane warp send       # small test transfer
+```
+
+### Step 4 — Run your own validators
+
+Validators sign Merkle-root checkpoints of the Hydration Mailbox so other chains can verify Hydration-origin messages.
+
+1. Provision a validator signing key — **AWS KMS** (not hex) for production.
+2. Provision an S3 bucket for checkpoint storage.
+3. Provision a **dedicated private RPC** to Hydration. Never public RPCs (rate limits + finality risk).
+4. Launch the validator agent in Docker, pointed at KMS + S3 + private RPC.
+5. Fund the validator EOA once for the `ValidatorAnnounce.announce()` tx.
+6. **Repeat on independent infrastructure** for N validators — separate keys, hosts, RPC providers. This is the whole point of multisig: an attacker has to compromise multiple operators.
+
+Wait until checkpoints are appearing in S3 before moving on.
+
+### Step 5 — Run your own relayer
+
+The local [hyperlane_db_relayer/](./hyperlane_db_relayer/) state is from a dev relayer. For production:
+
+1. Provision a relayer signing key (separate from any validator key) — AWS KMS.
+2. Fund the relayer EOA on **every destination chain** it will deliver to.
+3. Launch the relayer agent in Docker with `--relayChains hydration,ethereum,base,...` and **private RPCs per chain**.
+4. Run a hot-spare on independent infrastructure — the Mailbox is idempotent, so duplicate delivery is safe.
+
+### Step 6 — Switch ISM trustedRelayer → messageIdMultisigIsm
+
+**Only after step 4 validators are producing checkpoints.** This is the actual security upgrade — until now anyone with the relayer key could forge messages.
+
+Edit [configs/core-config.yaml](./configs/core-config.yaml):
+
+```yaml
+defaultIsm:
+  type: messageIdMultisigIsm
+  threshold: 2
+  validators:
+    - "0x<validator-1>"
+    - "0x<validator-2>"
+    - "0x<validator-3>"
+```
+
+Apply and verify:
+
+```bash
+hyperlane core apply --chain hydration
+hyperlane core read --chain hydration
+```
+
+Pick `threshold` so one validator outage can't halt the bridge (e.g., 2-of-3, 3-of-5).
+
+### Step 7 — Transfer ownership to a Gnosis Safe
+
+While the deployer EOA still owns Mailbox / ProxyAdmin / hooks, a single key compromise = full bridge takeover.
+
+1. Deploy or pick a Safe on Hydration EVM. Safe Transaction Service isn't live there, so coordinate signatures off-chain.
+2. In [configs/core-config.yaml](./configs/core-config.yaml), change every `owner:` field (top-level, `proxyAdmin.owner`, `requiredHook.owner`) to the Safe address.
+3. `hyperlane core apply --chain hydration`.
+4. Verify with `hyperlane core read --chain hydration`. From this point, ISM / hook changes require Safe approvals.
+
+### Step 8 — Same hardening for warp routes
+
+If you ran step 3:
+
+- `hyperlane warp read` → strip `trustedRelayerIsm` from warp config → `hyperlane warp apply`.
+- Mirror step 7's ownership transfer for each warp route's `owner` and `proxyAdmin.owner`.
+
+### Step 9 — Canonical registry PR
+
+Only after the bridge has been running stably end-to-end.
+
+- Add `deployer:` + `gasCurrencyCoinGeckoId: weth` + `logo.svg` to `chains/hydration/metadata.yaml`.
+- Fork `hyperlane-xyz/hyperlane-registry`, copy `metadata.yaml` + `addresses.yaml` + `logo.svg` into `chains/hydration/`, run `yarn changeset add`, open PR.
+- After merge, Hydration appears in the canonical registry — other deployers can route to/from it without local overrides.
+
+### Step 10 — Ongoing operations
+
+Track these continuously:
+
+| Signal | What it tells you |
+|---|---|
+| Validator S3 checkpoint last-modified | Validator alive + producing |
+| Relayer delivery latency (dispatch → process) | Relayer / RPC health |
+| `Mailbox.dispatched - processed` per chain | Backlog forming |
+| Validator + relayer EOA gas balances per chain | Days until they go dark |
+| RPC error rate | Need to add or swap providers |
+
+Scrape the agents' Prometheus endpoints into your existing monitoring stack.
 
 ---
 
@@ -183,8 +302,8 @@ Phase 1 + 2 are done. To make the bridge production-grade, continue with [PRODUC
 
 | Symptom | Likely cause / fix |
 |---|---|
-| `No chain metadata set for hydration` | Step 2 wasn't run, or `~/.hyperlane/chains/hydration/` is a symlink instead of a real directory. The CLI doesn't follow symlinks at that level. Re-run step 2 with `cp -R`. |
-| `insufficient funds for gas` | Top up the deployer EOA with more WETH on Hydration. |
-| Deploy hangs at a contract | RPC flake. CLI rotates through `rpcUrls` in order — reorder them in `chains/hydration/metadata.yaml` if a specific endpoint is unstable. |
-| Smoke test message stays pending | Ephemeral relayer needs gas on **both** chains. Confirm the deployer holds ETH on Ethereum, not just WETH on Hydration. |
+| `No chain metadata set for lark` | Step 2 wasn't run, or `~/.hyperlane/chains/lark/` is a symlink instead of a real directory. The CLI doesn't follow symlinks at that level. Re-run step 2 with `cp -R`. |
+| `insufficient funds for gas` | Top up the deployer EOA with more WETH on Lark. |
+| Deploy hangs at a contract | RPC flake. CLI rotates through `rpcUrls` in order — reorder them in `chains/lark/metadata.yaml` if a specific endpoint is unstable. |
+| Smoke test message stays pending | Ephemeral relayer needs gas on **both** chains. Confirm the deployer holds ETH on Ethereum, not just WETH on Lark. |
 | YAML schema validation error | A required field is missing in `metadata.yaml`. Run `hyperlane registry list -r .` from the repo root to surface the failing field path. |
