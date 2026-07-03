@@ -1,0 +1,28 @@
+# Prometheus scrape config for the Hyperlane validator + relayer agents (README.md Phase 6).
+# Targets use the HOST-published ports (validator compose: 9091-9093; relayer compose: 9094 —
+# host 9090 is left free for Prometheus itself). This works when Prometheus runs on the same host
+# (binary, or a container with network_mode: host). The validator and relayer stacks are separate
+# compose projects with separate networks, so compose service names (relayer:9090 etc.) are NOT
+# resolvable unless you add a shared external docker network to both compose files.
+#
+# NOTE: alerts.yml only changes alert STATE — routing pages/notifications requires an Alertmanager
+# (not shipped here). Add an `alerting:` block pointing at yours before relying on these alerts.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: hyperlane-relayer
+    static_configs:
+      - targets: ["localhost:9094"]
+        labels:
+          role: relayer
+
+  - job_name: hyperlane-validators
+    static_configs:
+      - targets: ["localhost:9091", "localhost:9092", "localhost:9093"]
+        labels:
+          role: validator

@@ -1,0 +1,25 @@
+# Hydration mainnet — INITIAL core deploy config (Phase 1).
+# Input to:  hyperlane core deploy --chain hydration
+#
+# Intentionally matches the testnet posture: single-EOA owner + trustedRelayerIsm.
+# This is INSECURE by design and is hardened later:
+#   - Phase 4c swaps the ISM  -> configs/hydration/core-config.multisig-ism.yaml
+#   - Phase 4d moves ownership -> configs/hydration/core-config.safe-owner.yaml
+#
+# No contract addresses here: `core deploy` creates them and writes chains/hydration/addresses.yaml.
+# The interchainAccountRouter + factories are deployed automatically by `core deploy`.
+# Replace <DEPLOYER_EOA> and <RELAYER_EOA> before deploying. See README.md Phase 0/1.
+owner: "<DEPLOYER_EOA>"
+defaultIsm:
+  type: trustedRelayerIsm
+  relayer: "<RELAYER_EOA>"
+defaultHook:
+  type: merkleTreeHook
+requiredHook:
+  type: protocolFee
+  owner: "<DEPLOYER_EOA>"
+  beneficiary: "<DEPLOYER_EOA>"
+  maxProtocolFee: "100000000000000000"
+  protocolFee: "0"            # TODO: decide the mainnet protocol-fee policy (0 = no fee)
+proxyAdmin:
+  owner: "<DEPLOYER_EOA>"

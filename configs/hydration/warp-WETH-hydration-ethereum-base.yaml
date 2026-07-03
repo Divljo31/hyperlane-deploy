@@ -1,0 +1,52 @@
+# Hydration mainnet warp route — WETH  hydration <-> ethereum <-> base (single 3-chain route).
+# Supersedes warp-hydration-ethereum.example.yaml (2026-07-02): routes to BOTH Ethereum mainnet
+# and Base. One combined route enrolls all three routers, so synthetic WETH can also move
+# ethereum <-> base directly.
+#
+# Phase 3: hyperlane warp init  ->  hyperlane warp deploy  ->  hyperlane warp send (small amount).
+# Topology (same as the Lark/Base-Sepolia rehearsal): native on Hydration (WETH is the gas token),
+# synthetic mint/burn on the remotes. Alternative — collateral on ethereum/base so users receive
+# canonical WETH — requires seeded vault liquidity + rebalancing; revisit before deploy if that is
+# the product goal.
+# Remaining placeholders: <HYDRATION_MAILBOX> from chains/hydration/addresses.yaml (Phase 1);
+# owner/relayer EOAs from Phase 0 (owner later becomes the Safe, via Phase 4f).
+hydration:
+  type: native                 # WETH is the native gas token on Hydration EVM (as on Lark)
+  mailbox: "<HYDRATION_MAILBOX>"          # from chains/hydration/addresses.yaml (after Phase 1)
+  owner: "<DEPLOYER_EOA_OR_SAFE>"
+  proxyAdmin:
+    owner: "<DEPLOYER_EOA_OR_SAFE>"       # pin the escrow's ProxyAdmin (include in the Phase 4f Safe handover)
+  # trustedRelayerIsm for the initial deploy. Phase 4e caveat: stripping it here makes the route
+  # fall back to the HYDRATION mailbox default ISM (messageIdMultisigIsm after Phase 4c) — that is
+  # fine. On ethereum/base (below) the fallback is the CANONICAL mailbox default ISM, which has no
+  # route for domain 222222 until Hyperlane registers it — set an explicit messageIdMultisigIsm
+  # (your validators, origin hydration) on those routers BEFORE stripping trustedRelayerIsm there.
+  interchainSecurityModule:
+    type: trustedRelayerIsm
+    relayer: "<RELAYER_EOA>"
+
+ethereum:
+  type: synthetic              # mint/burn synthetic WETH on Ethereum
+  name: Wrapped Ether
+  symbol: WETH
+  decimals: 18
+  mailbox: "0xc005dc82818d67AF737725bD4bf75435d065D239"   # canonical (hyperlane-registry, verified 2026-07-02)
+  owner: "<DEPLOYER_EOA_OR_SAFE>"
+  interchainSecurityModule:
+    type: trustedRelayerIsm
+    relayer: "<RELAYER_EOA_ON_ETHEREUM>"
+  proxyAdmin:
+    owner: "<DEPLOYER_EOA_OR_SAFE>"
+
+base:
+  type: synthetic              # mint/burn synthetic WETH on Base
+  name: Wrapped Ether
+  symbol: WETH
+  decimals: 18
+  mailbox: "0xeA87ae93Fa0019a82A727bfd3eBd1cFCa8f64f1D"   # canonical (hyperlane-registry, verified 2026-07-02)
+  owner: "<DEPLOYER_EOA_OR_SAFE>"
+  interchainSecurityModule:
+    type: trustedRelayerIsm
+    relayer: "<RELAYER_EOA_ON_BASE>"
+  proxyAdmin:
+    owner: "<DEPLOYER_EOA_OR_SAFE>"

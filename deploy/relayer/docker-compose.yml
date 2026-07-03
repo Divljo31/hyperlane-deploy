@@ -1,0 +1,43 @@
+# Hydration mainnet relayer (Phase 4b) — SELF-HOSTED (no AWS).
+# Signing: hexKey. Reads validator checkpoints from the SHARED localStorage volume, so
+# --allowLocalCheckpointSyncers=true. Must run on the same host as the validators, or mount the same
+# NFS-backed `hyperlane_checkpoints` volume.
+# HA: run ONE relayer per key. Two concurrent instances on the same EOA race nonces and pay gas for
+# already-delivered process() reverts — keep a warm standby (same DB volume) and start it only when
+# the primary is confirmed down.
+#
+# The relayer DB is FRESH — never seed it from a testnet relayer DB.
+# Setup: cp .env.example .env && fill && chmod 600 .env ; docker compose up -d
+services:
+  relayer:
+    image: ghcr.io/hyperlane-xyz/hyperlane-agent:agents-v2.2.0
+    restart: always
+    command:
+      - ./relayer
+      - --db=/hyperlane_db
+      - --relayChains=${RELAY_CHAINS:?set in .env}
+      - --defaultSigner.type=hexKey
+      - --defaultSigner.key=${RELAYER_KEY:?set in .env}
+      - --chains.hydration.customRpcUrls=${HYDRATION_RPC_URLS:?set in .env}
+      - --chains.ethereum.customRpcUrls=${ETHEREUM_RPC_URLS:?set in .env}
+      - --chains.base.customRpcUrls=${BASE_RPC_URLS:?set in .env}
+      # Only relay messages to/from Hydration. Without this, the relayer indexes the canonical
+      # ethereum/base mailboxes and pays gas trying to deliver ALL third-party ethereum<->base
+      # traffic. After the warp deploy (Phase 3), extend with the warp router addresses if you
+      # want direct ethereum<->base synthetic transfers relayed too.
+      - '--whitelist=[{"originDomain":222222},{"destinationDomain":222222}]'
+      - --allowLocalCheckpointSyncers=true
+      - --metrics-port=9090
+    environment:
+      CONFIG_FILES: /config/agent-config.json
+    volumes:
+      - ../../configs/agent-config.mainnet.json:/config/agent-config.json:ro
+      - relayer-db:/hyperlane_db
+      - hyperlane_checkpoints:/checkpoints:ro
+    ports:
+      - "9094:9090"      # host 9094: leaves 9090 free for Prometheus on the single-host setup
+
+volumes:
+  relayer-db:            # persistent; back this up. Fresh — never seeded from a testnet DB.
+  hyperlane_checkpoints:
+    external: true       # same shared volume the validators write to (`docker volume create hyperlane_checkpoints`)

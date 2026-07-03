@@ -1,0 +1,90 @@
+# Hydration mainnet validators (Phase 4a) — SELF-HOSTED (no AWS).
+# Signing: hexKey (private key from .env). Checkpoints: localStorage on a SHARED volume the relayer reads.
+#
+# The Hyperlane agent's checkpoint syncer supports only `localStorage` or AWS `s3`. For a no-cloud setup
+# we use localStorage, so validators + relayer MUST share the checkpoint filesystem:
+#   - single host  -> the shared docker volume `hyperlane_checkpoints` below
+#   - multiple hosts -> back that volume with NFS (or similar) so all agents see the same files
+#
+# Security: the multisig ISM relies on INDEPENDENT SIGNING KEYS per validator. Running all three on one
+# box is the simplest MVP but co-locates the hex keys (host compromise = all keys) and is a single point
+# of failure — split across hosts for real HA. Keep .env at chmod 600 (or use Docker secrets / self-hosted
+# Vault to inject the keys); never commit keys.
+#
+# Setup: docker volume create hyperlane_checkpoints ; cp .env.example .env && fill ; docker compose up -d
+services:
+  validator-1:
+    image: ghcr.io/hyperlane-xyz/hyperlane-agent:agents-v2.2.0
+    restart: always
+    command:
+      - ./validator
+      - --db=/hyperlane_db
+      - --originChainName=hydration
+      - --chains.hydration.customRpcUrls=${HYDRATION_RPC_URLS:?set in .env}
+      - --chains.hydration.blocks.reorgPeriod=finalized
+      - --validator.type=hexKey
+      - --validator.key=${VALIDATOR_1_KEY:?set in .env}
+      - --checkpointSyncer.type=localStorage
+      - --checkpointSyncer.path=/checkpoints/validator-1
+      - --metrics-port=9090
+    environment:
+      CONFIG_FILES: /config/agent-config.json
+    volumes:
+      - ../../configs/agent-config.mainnet.json:/config/agent-config.json:ro
+      - validator-1-db:/hyperlane_db
+      - hyperlane_checkpoints:/checkpoints
+    ports:
+      - "9091:9090"
+
+  validator-2:
+    image: ghcr.io/hyperlane-xyz/hyperlane-agent:agents-v2.2.0
+    restart: always
+    command:
+      - ./validator
+      - --db=/hyperlane_db
+      - --originChainName=hydration
+      - --chains.hydration.customRpcUrls=${HYDRATION_RPC_URLS:?set in .env}
+      - --chains.hydration.blocks.reorgPeriod=finalized
+      - --validator.type=hexKey
+      - --validator.key=${VALIDATOR_2_KEY:?set in .env}
+      - --checkpointSyncer.type=localStorage
+      - --checkpointSyncer.path=/checkpoints/validator-2
+      - --metrics-port=9090
+    environment:
+      CONFIG_FILES: /config/agent-config.json
+    volumes:
+      - ../../configs/agent-config.mainnet.json:/config/agent-config.json:ro
+      - validator-2-db:/hyperlane_db
+      - hyperlane_checkpoints:/checkpoints
+    ports:
+      - "9092:9090"
+
+  validator-3:
+    image: ghcr.io/hyperlane-xyz/hyperlane-agent:agents-v2.2.0
+    restart: always
+    command:
+      - ./validator
+      - --db=/hyperlane_db
+      - --originChainName=hydration
+      - --chains.hydration.customRpcUrls=${HYDRATION_RPC_URLS:?set in .env}
+      - --chains.hydration.blocks.reorgPeriod=finalized
+      - --validator.type=hexKey
+      - --validator.key=${VALIDATOR_3_KEY:?set in .env}
+      - --checkpointSyncer.type=localStorage
+      - --checkpointSyncer.path=/checkpoints/validator-3
+      - --metrics-port=9090
+    environment:
+      CONFIG_FILES: /config/agent-config.json
+    volumes:
+      - ../../configs/agent-config.mainnet.json:/config/agent-config.json:ro
+      - validator-3-db:/hyperlane_db
+      - hyperlane_checkpoints:/checkpoints
+    ports:
+      - "9093:9090"
+
+volumes:
+  validator-1-db:
+  validator-2-db:
+  validator-3-db:
+  hyperlane_checkpoints:
+    external: true    # `docker volume create hyperlane_checkpoints` (or an NFS-backed volume for multi-host)

@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=../schema.json
+# Hydration mainnet — Hyperlane chain metadata.
+# Scaffolded from chains/lark/metadata.yaml (the testnet dress-rehearsal).
+# Live-verified 2026-07-02: chainId 0x3640e (222222) via eth_chainId on both RPCs below.
+blockExplorers:
+  - apiUrl: https://explorer.evm.hydration.cloud/api   # TODO: confirm before registry PR — front-end is Blockscout but /api and /api/v2 404'd in probes
+    family: blockscout
+    name: Hydration EVM Explorer
+    url: https://explorer.evm.hydration.cloud
+blocks:
+  confirmations: 1
+  estimateBlockTime: 6
+  reorgPeriod: finalized      # relay-chain finality tag (same rationale as Lark), not a block count
+chainId: 222222               # verified via eth_chainId — Lark reused this mainnet chainId, not vice versa
+deployer:
+  name: Hydration
+  url: https://hydration.net
+displayName: Hydration
+domainId: 222222              # = chainId (registry convention); free in canonical registry as of 2026-07-02.
+                              # Lark testnet reused this domainId and was removed 2026-07-02 — any future
+                              # testnet redeploy must pick a distinct domainId (e.g. 1222222).
+gasCurrencyCoinGeckoId: weth
+isTestnet: false
+name: hydration
+nativeToken:
+  decimals: 18
+  name: Wrapped Ether
+  symbol: WETH                # Hydration EVM denominates balances/msg.value in WETH (pallet_evm WethCurrency)
+protocol: ethereum
+rpcUrls:
+  # Public endpoints — correct for registry metadata. Agents use private RPCs via
+  # customRpcUrls overrides (deploy/*/.env), per the README security must-dos.
+  - http: https://rpc.hydradx.cloud             # official Galactic Council endpoint
+  - http: https://hydration-rpc.n.dwellir.com   # Dwellir public endpoint
+technicalStack: polkadotsubstrate
+transactionOverrides:
+  # Verified against mainnet 2026-07-02: eth_gasPrice ≈ 0.0041 gwei, eth_maxPriorityFeePerGas 0.
+  # maxFeePerGas is a hard cap (SDK overrides replace fee estimation — no escalation past it).
+  # With priority fee 0 the sender only ever pays base fee, so a high cap costs nothing extra;
+  # 3 gwei ≈ 700x observed base fee, vs Lark's 0.03 gwei which left only ~7x headroom.
+  maxFeePerGas: 3000000000
+  maxPriorityFeePerGas: 0

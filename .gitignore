@@ -11,3 +11,10 @@ strategy.yaml
 
 hyperlane_db_relayer/
 generated/
+
+# Deploy env files hold secrets (KMS creds / RPC keys); keep the .example templates committed.
+# (basename pattern matches at any depth, so this also covers deploy/*/.env.example)
+!.env.example
+
+# Mainnet signer material, if ever kept locally
+configs/strategy.mainnet.yaml

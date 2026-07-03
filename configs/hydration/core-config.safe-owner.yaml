@@ -1,0 +1,28 @@
+# Hydration mainnet — Phase 4d: transfer ownership from the deployer EOA to a Gnosis Safe.
+# DO THIS AFTER 4c, and only after confirming `core apply` works with the EOA.
+# NOTE: Hydration EVM has no Safe Transaction Service — coordinate signers off-chain.
+#
+# Workflow:
+#   1. hyperlane core read --chain hydration > /tmp/hydration-core.yaml
+#   2. In that file, set EVERY owner field to <SAFE_ADDRESS> (see the full list below).
+#   3. hyperlane core apply --chain hydration    # the LAST action signed by the deployer EOA
+#   4. hyperlane core read  --chain hydration    # confirm the Safe owns everything
+#
+# After this, every ISM/hook change becomes a Safe multisig ceremony; the deployer EOA loses privilege.
+#
+# Owner fields to change to <SAFE_ADDRESS>:
+#   - owner:                                   (top level)
+#   - proxyAdmin.owner:
+#   - requiredHook.owner:
+#   - interchainAccountRouter.owner:           (and .commitmentIsm.owner and .interchainSecurityModule.owner)
+owner: "<SAFE_ADDRESS>"
+proxyAdmin:
+  owner: "<SAFE_ADDRESS>"
+requiredHook:
+  owner: "<SAFE_ADDRESS>"
+interchainAccountRouter:
+  owner: "<SAFE_ADDRESS>"
+  commitmentIsm:
+    owner: "<SAFE_ADDRESS>"
+  interchainSecurityModule:
+    owner: "<SAFE_ADDRESS>"

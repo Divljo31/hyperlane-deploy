@@ -1,0 +1,45 @@
+{
+  "_comment": "Hyperlane agent config for MAINNET validators + relayer (Phase 4). JSON has no comments, so remaining fill-me values are zero-address / index.from=0 placeholders written by the Phase 1 core deploy — see README.md. interchainGasPaymaster stays 0x0: core-config.initial.yaml deploys no IGP (protocolFee hook). Canonical chains (ethereum, base) pull metadata + addresses from the hyperlane-registry; only RPC overrides are set here. 'hydration' is a custom chain and is fully specified. NOTE: rpcUrls here are unused fallbacks at agent runtime — the compose files pass private RPCs via --chains.*.customRpcUrls from deploy/*/.env; never commit credentialed URLs to this file.",
+  "chains": {
+    "hydration": {
+      "blocks": {
+        "confirmations": 1,
+        "estimateBlockTime": 6,
+        "reorgPeriod": "finalized"
+      },
+      "chainId": 222222,
+      "displayName": "Hydration",
+      "domainId": 222222,
+      "isTestnet": false,
+      "name": "hydration",
+      "nativeToken": {
+        "decimals": 18,
+        "name": "Wrapped Ether",
+        "symbol": "WETH"
+      },
+      "protocol": "ethereum",
+      "rpcUrls": [
+        { "http": "https://rpc.hydradx.cloud" },
+        { "http": "https://hydration-rpc.n.dwellir.com" }
+      ],
+      "technicalStack": "polkadotsubstrate",
+      "mailbox": "0x0000000000000000000000000000000000000000",
+      "interchainGasPaymaster": "0x0000000000000000000000000000000000000000",
+      "merkleTreeHook": "0x0000000000000000000000000000000000000000",
+      "validatorAnnounce": "0x0000000000000000000000000000000000000000",
+      "index": {
+        "from": 0
+      }
+    },
+    "ethereum": {
+      "rpcUrls": [
+        { "http": "https://ethereum-rpc.publicnode.com" }
+      ]
+    },
+    "base": {
+      "rpcUrls": [
+        { "http": "https://base-rpc.publicnode.com" }
+      ]
+    }
+  }
+}
