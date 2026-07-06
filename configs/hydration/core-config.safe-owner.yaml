@@ -2,24 +2,31 @@
 # DO THIS AFTER 4c, and only after confirming `core apply` works with the EOA.
 # NOTE: Hydration EVM has no Safe Transaction Service — coordinate signers off-chain.
 #
-# Workflow:
-#   1. hyperlane core read --chain hydration > /tmp/hydration-core.yaml
-#   2. In that file, set EVERY owner field to <SAFE_ADDRESS> (see the full list below).
-#   3. hyperlane core apply --chain hydration    # the LAST action signed by the deployer EOA
-#   4. hyperlane core read  --chain hydration    # confirm the Safe owns everything
+# Workflow — pass --config on BOTH read and apply. A bare `core apply` reads the DEFAULT
+# ./configs/core-config.yaml, NOT your edit, so it silently no-ops and ownership never moves.
+#   1. hyperlane core read  --chain hydration --config /tmp/hydration-core.yaml
+#   2. In /tmp/hydration-core.yaml, set EVERY owner field to <SAFE_ADDRESS> (see the full list below).
+#   3. hyperlane core apply --chain hydration --config /tmp/hydration-core.yaml   # the last CORE action signed by the deployer EOA
+#   4. hyperlane core read  --chain hydration --config /tmp/hydration-core.after.yaml   # confirm the Safe owns everything
+#      (if step 3 printed "No updates needed", your edit was NOT picked up — check the --config path)
 #
-# After this, every ISM/hook change becomes a Safe multisig ceremony; the deployer EOA loses privilege.
+# After this, every CORE ISM/hook change becomes a Safe multisig ceremony; the deployer EOA loses
+# privilege OVER CORE — but the warp routers + their proxyAdmins stay deployer-EOA-owned until Phase 4f,
+# so do NOT retire the deployer key until 4e/4f are done.
 #
 # Owner fields to change to <SAFE_ADDRESS>:
 #   - owner:                                   (top level)
 #   - proxyAdmin.owner:
-#   - requiredHook.owner:
+#   - requiredHook.owner:  (and requiredHook.beneficiary — the protocolFee recipient, set to <DEPLOYER_EOA>
+#                           in core-config.initial.yaml; re-point it now, else a future nonzero fee accrues
+#                           to the retired deployer key)
 #   - interchainAccountRouter.owner:           (and .commitmentIsm.owner and .interchainSecurityModule.owner)
 owner: "<SAFE_ADDRESS>"
 proxyAdmin:
   owner: "<SAFE_ADDRESS>"
 requiredHook:
   owner: "<SAFE_ADDRESS>"
+  beneficiary: "<SAFE_ADDRESS>"     # or a dedicated treasury — just not the deployer EOA
 interchainAccountRouter:
   owner: "<SAFE_ADDRESS>"
   commitmentIsm:

@@ -2,11 +2,13 @@
 # DO THIS ONLY AFTER validators (Phase 4a) are producing checkpoints in your checkpoint store
 # (the shared /checkpoints docker volume for the self-hosted setup; S3 if you chose AWS).
 #
-# Workflow:
-#   1. hyperlane core read --chain hydration > /tmp/hydration-core.yaml   # current on-chain config
-#   2. In that file, replace the whole `defaultIsm:` block with the block below.
-#   3. hyperlane core apply --chain hydration    # still signed by the deployer EOA (owner not yet the Safe)
-#   4. hyperlane core read  --chain hydration    # confirm it now shows messageIdMultisigIsm
+# Workflow — pass --config on BOTH read and apply. A bare `core apply` reads the DEFAULT
+# ./configs/core-config.yaml, NOT your edit, so it finds no diff and silently applies nothing.
+#   1. hyperlane core read  --chain hydration --config /tmp/hydration-core.yaml   # writes current on-chain config to that file
+#   2. In /tmp/hydration-core.yaml, replace the whole `defaultIsm:` block with the block below.
+#   3. hyperlane core apply --chain hydration --config /tmp/hydration-core.yaml   # signed by the deployer EOA (owner not yet the Safe)
+#   4. hyperlane core read  --chain hydration --config /tmp/hydration-core.after.yaml   # confirm it now shows messageIdMultisigIsm
+#      (if step 3 printed "No updates needed", your edit was NOT picked up — check the --config path)
 #
 # The messageIdMultisigIsm factory already exists from `core deploy`
 # (staticMessageIdMultisigIsmFactory in chains/hydration/addresses.yaml) — no redeploy needed.

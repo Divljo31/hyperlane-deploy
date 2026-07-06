@@ -7,9 +7,12 @@
 #   - multiple hosts -> back that volume with NFS (or similar) so all agents see the same files
 #
 # Security: the multisig ISM relies on INDEPENDENT SIGNING KEYS per validator. Running all three on one
-# box is the simplest MVP but co-locates the hex keys (host compromise = all keys) and is a single point
-# of failure — split across hosts for real HA. Keep .env at chmod 600 (or use Docker secrets / self-hosted
-# Vault to inject the keys); never commit keys.
+# box co-locates the hex keys, so ONE host compromise yields all three keys = the full 2-of-3 quorum —
+# the attacker can sign fraudulent checkpoints and release/mint bridged value (the ISM collapses to
+# 1-of-1 trust in that box). That is an integrity/fund-theft risk, not just a single point of failure:
+# do NOT run mainnet value on the single-host layout — split across independent hosts (ideally separate
+# key custody / HSMs). Keep .env at chmod 600 (or use Docker secrets / self-hosted Vault to inject the
+# keys); never commit keys.
 #
 # Setup: docker volume create hyperlane_checkpoints ; cp .env.example .env && fill ; docker compose up -d
 services:

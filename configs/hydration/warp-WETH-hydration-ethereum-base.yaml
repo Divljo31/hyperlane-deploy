@@ -10,6 +10,8 @@
 # the product goal.
 # Remaining placeholders: <HYDRATION_MAILBOX> from chains/hydration/addresses.yaml (Phase 1);
 # owner/relayer EOAs from Phase 0 (owner later becomes the Safe, via Phase 4f).
+# <RELAYER_EOA> is the single relayer agent's EOA — one EVM key shares the same address on hydration,
+# ethereum and base, so fill all three relayer: fields below with that one address.
 hydration:
   type: native                 # WETH is the native gas token on Hydration EVM (as on Lark)
   mailbox: "<HYDRATION_MAILBOX>"          # from chains/hydration/addresses.yaml (after Phase 1)
@@ -34,7 +36,7 @@ ethereum:
   owner: "<DEPLOYER_EOA_OR_SAFE>"
   interchainSecurityModule:
     type: trustedRelayerIsm
-    relayer: "<RELAYER_EOA_ON_ETHEREUM>"
+    relayer: "<RELAYER_EOA>"                # same single relayer EOA as above
   proxyAdmin:
     owner: "<DEPLOYER_EOA_OR_SAFE>"
 
@@ -47,6 +49,6 @@ base:
   owner: "<DEPLOYER_EOA_OR_SAFE>"
   interchainSecurityModule:
     type: trustedRelayerIsm
-    relayer: "<RELAYER_EOA_ON_BASE>"
+    relayer: "<RELAYER_EOA>"                # same single relayer EOA as above
   proxyAdmin:
     owner: "<DEPLOYER_EOA_OR_SAFE>"

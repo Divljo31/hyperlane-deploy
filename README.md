@@ -4,6 +4,13 @@ The single runbook for deploying, hardening, and registering Hyperlane on **Hydr
 with a WETH warp route to **Ethereum** and **Base**. Everything else in this repo is config that
 the phases below consume. Ordering is strict: **0 → 1 → 2 → (3) → 4a → 4b → 4c → 4d → (4e/4f) → 5 → 6**.
 
+> **Just deploying the contracts?** For a clean, self-contained hand-off runbook that a colleague can follow
+> to deploy the core (messaging) contracts and smoke-test — **no warp route, no hardening** — see
+> **[DEPLOY.md](DEPLOY.md)**. (Add the WETH warp route later via Phase 3.)
+>
+> **Adding Solana?** To extend this deployment with interchain *messaging* to/from Solana mainnet (no
+> token/warp route), see **[SOLANA.md](SOLANA.md)** — it's additive on this same core deploy + agents.
+
 > History: this setup was dress-rehearsed on the Lark testnet, which was removed on 2026-07-02
 > because it had reused mainnet's chainId/domainId `222222` (recover via `git log -- chains/lark`).
 > Any future testnet must use a **different domainId** (e.g. `1222222`).
@@ -17,13 +24,16 @@ the phases below consume. Ordering is strict: **0 → 1 → 2 → (3) → 4a →
 | Native/gas token | WETH, 18 decimals | Frontier `pallet_evm` WethCurrency |
 | Finality | `reorgPeriod: finalized` (relay-chain tag), ~6s blocks | — |
 | Gas market | base fee ≈ 0.0041 gwei, priority fee 0 | `eth_gasPrice` / `eth_maxPriorityFeePerGas` |
-| Explorer | `https://explorer.evm.hydration.cloud` (Blockscout) | ⚠️ backend `apiUrl` unconfirmed — `/api` 404s; ask Hydration infra before the Phase 5 PR |
+| Explorer | `https://hydration.subscan.io` (Subscan, `family: other`) | human link works; API needs a key & isn't Etherscan-compatible → no auto contract-verification (see Phase 0 note) |
 | Canonical registry | no `hydration` entry; chainId/domainId 222222 unused | checked 2026-07-02 |
 
 Design decisions baked into the configs: `technicalStack: polkadotsubstrate` (as Moonbeam/Astar),
-`maxFeePerGas: 3 gwei` (SDK overrides are a hard cap with no escalation — with priority fee 0 only
-base fee is ever paid, so headroom is free), initial ISM `trustedRelayerIsm` (hardened in 4c),
-hooks `merkleTreeHook` + `protocolFee(0)` — **no IGP is deployed**.
+`maxFeePerGas: 15 gwei` (SDK overrides are a hard cap with no escalation; the runtime's dynamic fee
+is clamped to ~14.4 gwei max, and with priority fee 0 only base fee is ever paid, so the headroom
+is free), initial ISM `trustedRelayerIsm` (hardened in 4c), hooks `merkleTreeHook` +
+`protocolFee(0)` — **no IGP is deployed**. Hydration runs a modern Frontier EVM (Cancun/Shanghai-class,
+PUSH0/MCOPY available) and EVM deploys are **permissioned** — we hold the authorized deployer key
+(Phase 0), so no OpenGov referendum is needed.
 
 ## Repo layout
 
@@ -44,38 +54,67 @@ deploy/
 
 ## Security must-dos (blocking)
 
-- **New keys** for deployer / 3 validators / relayer — never reuse testnet keys. Deployer key only
-  via ephemeral `HYP_KEY`. Agent keys live in `deploy/*/.env` (`chmod 600`, or Docker secrets/Vault).
-  One independent key per validator.
+- **New keys** for 3 validators + relayer — never reuse testnet keys; agent keys live in
+  `deploy/*/.env` (`chmod 600`, or Docker secrets/Vault); one independent key per validator.
+- **Deployer key**: we use the existing whitelisted contract-deployer key (see Phase 0). It's the
+  *initial owner* of the core contracts — Mailbox, ProxyAdmin (upgrade authority), fee hook, and the
+  interchainAccountRouter (plus its ISM owners; see Phase 4d for the full list) — and, once Phase 3
+  runs, of the warp routers and their proxyAdmins. It stays privileged until the **4d** (core) and
+  **4f** (warp) Safe handovers, so **do 4d promptly and do NOT retire the key until 4e/4f are done**.
+  Pass it only via ephemeral `HYP_KEY`, never committed. (If that key is shared/used elsewhere,
+  coordinate to avoid nonce clashes during deploy.)
 - **≥2 private RPCs per chain** for the agents, set in `deploy/*/.env` (`customRpcUrls` overrides
   the JSON at runtime — never commit credentialed URLs; the public URLs in metadata/agent-config
   are correct for the registry and as unused fallbacks).
-- **N-of-M multisig ISM** (4c) and a **Safe** (not EOA) as final owner (4d).
+- **N-of-M multisig ISM** (4c) and a **Safe** (not EOA) as final owner (4d). 4c hardens only the
+  **core mailbox** default ISM — the warp routers keep their own `trustedRelayerIsm` until 4e.
+- **Strip `trustedRelayerIsm` from every warp router (4e), then hand them to the Safe (4f)** — until
+  4e, all inbound WETH deliveries (native release on Hydration, **mint** on Ethereum/Base) are
+  verified by trusting the single relayer hot key with no validator signatures, so a compromised
+  relayer key can forge deliveries and mint/release value. Do 4e/4f before the route carries value.
 - Relayer DB is **fresh**; **one relayer per key** (warm standby only — two concurrent instances on
   one EOA race nonces and pay gas for already-delivered reverts).
 
 ## Phase 0 — prep
 
-- [x] `chains/hydration/metadata.yaml` — complete & live-verified (chainId/domainId, RPCs, explorer,
-      deployer `Hydration / hydration.net`, gas overrides, alphabetized) — 2026-07-02
+- [x] `chains/hydration/metadata.yaml` — complete & alphabetized; on-chain facts (chainId/domainId,
+      RPCs, gas market, deployer `Hydration / hydration.net`) live-verified 2026-07-02. Explorer
+      switched to Subscan and gas cap raised to 15 gwei on 2026-07-03 (Subscan apiUrl unverified —
+      see the explorer item below).
 - [x] `chains/hydration/logo.svg` — official mark, passes registry SVG validation
-- [ ] Confirm explorer `apiUrl` (only remaining metadata TODO; gates Phase 5)
-- [ ] Generate/secure deployer EOA, relayer EOA, 3 validator EOAs
-- [ ] Fund deployer EOA with ≥ 0.01 WETH on Hydration
+- [ ] Explorer: metadata points at Subscan (`family: other`). Human link works as-is. Only if you
+      want EVM contract verification / tx-link tooling: either add a Subscan API key, or ask infra to
+      expose the Blockscout API (`explorer.evm.hydration.cloud`) and add a `family: blockscout` entry.
+      Not a blocker for the registry PR.
+- [ ] Generate/secure relayer EOA + 3 validator EOAs
+- [x] **Deployer authorization — SORTED.** Hydration mainnet EVM is permissioned
+      (`EVMAccounts::can_deploy_contracts` gates every `create`), and we already hold the authorized
+      contract-deployer key — no OpenGov referendum needed. This same key does Phase 1 core deploy
+      AND Phase 3 warp deploys. Two caveats: (1) it becomes initial owner of all core contracts (and,
+      after Phase 3, the warp routers) → prioritize the Phase 4d/4f Safe handovers and keep the key
+      until 4e/4f are done (see security note above); (2) if that key is
+      governance/SigNet-MPC-controlled rather than a raw private key, the CLI's `HYP_KEY` flow won't
+      work directly — deploy through your existing signing tooling instead.
+      *Alternative (skip): whitelist a fresh dedicated deployer EOA via `add_contract_deployer`
+      (GeneralAdmin OpenGov referendum) for clean key isolation — only if you don't want to reuse
+      the shared key.*
+- [ ] Confirm the deployer key is usable as `HYP_KEY` (raw key) OR note the MPC-tooling path
+- [ ] Fund the deployer EOA with ≥ 0.01 WETH on Hydration
 - [ ] Fill `<DEPLOYER_EOA>` / `<RELAYER_EOA>` in `configs/hydration/core-config.initial.yaml`
       (and decide `protocolFee` — currently 0)
 
 ## Phase 1 — core deploy
 
 ```bash
-npm i -g @hyperlane-xyz/cli
+npm i -g @hyperlane-xyz/cli   # CLI flags below verified vs v33.1.1; run `hyperlane <cmd> --help` to confirm on your version
 
 # real directory, NOT a symlink — the CLI's registry walker doesn't follow symlinks
 mkdir -p ~/.hyperlane/chains
 cp -R chains/hydration ~/.hyperlane/chains/hydration
 
 HISTFILE=/dev/null; read -rs HYP_KEY; export HYP_KEY     # deployer key, ephemeral shell
-hyperlane core deploy --chain hydration
+# --config is REQUIRED: core deploy reads its input from it (default ./configs/core-config.yaml, which we don't have)
+hyperlane core deploy --chain hydration --config configs/hydration/core-config.initial.yaml
 cp ~/.hyperlane/chains/hydration/addresses.yaml chains/hydration/addresses.yaml
 ```
 
@@ -109,20 +148,33 @@ remote mailboxes already filled.
 > needs seeded vault liquidity + rebalancing. Decide before deploying.
 
 - [ ] Fill `<HYDRATION_MAILBOX>` (from Phase 1) + owner/relayer EOAs in the warp config
-- [ ] `hyperlane warp deploy`, then `hyperlane warp send` a small amount hydration→ethereum,
-      hydration→base, and back
+- [ ] **Do NOT run `hyperlane warp init` for this route** — it generates a fresh interactive config and
+      discards the hand-pinned mailboxes/ISM/proxyAdmin. The current CLI resolves warp configs by
+      `--warp-route-id` from the registry (no `--config` file flag), so stage the prepared file into
+      the local registry and deploy by id:
+      ```bash
+      mkdir -p ~/.hyperlane/deployments/warp_routes/WETH
+      cp configs/hydration/warp-WETH-hydration-ethereum-base.yaml \
+         ~/.hyperlane/deployments/warp_routes/WETH/hydration-ethereum-base-deploy.yaml
+      hyperlane warp deploy --warp-route-id WETH/hydration-ethereum-base
+      ```
+- [ ] Smoke it: `hyperlane warp send --warp-route-id WETH/hydration-ethereum-base --origin hydration
+      --destination ethereum` (small amount), repeat for base, and back
 - [ ] If direct ethereum↔base synthetic transfers should be relayed: extend the relayer
       `--whitelist` in `deploy/relayer/docker-compose.yml` with the warp router addresses
 
-For other tokens (HOLLAR, HDX-as-ERC20, USDC…): `hyperlane warp init` → `warp deploy`, same pattern.
+For other tokens (HOLLAR, HDX-as-ERC20, USDC…): `hyperlane warp init` **generates a new config from
+scratch** → stage it under a new `warp-route-id` → `warp deploy`, same pattern.
 
 ## Phase 4 — production hardening
 
 ### 4a — validators
 
 `deploy/validator/docker-compose.yml`: 3 validators, hexKey signing, localStorage checkpoints on the
-shared `hyperlane_checkpoints` volume. Running all three on one host is an MVP — a host compromise
-exposes all keys; split hosts for real HA (back the volume with NFS).
+shared `hyperlane_checkpoints` volume. Running all three on one host co-locates all keys, so one host
+compromise yields the full 2-of-3 quorum — the attacker can sign fraudulent checkpoints and mint/release
+value (an integrity/fund-theft risk, not just downtime). Split across independent hosts before the route
+carries real value (back the shared volume with NFS).
 
 ```bash
 docker volume create hyperlane_checkpoints
@@ -150,16 +202,19 @@ docker compose up -d    # relayer EOA must be funded on hydration, ethereum, AND
 ### 4c — switch default ISM to 2-of-3 multisig
 
 Only after 4a validators produce checkpoints. Fill `<VALIDATOR_N_EVM_ADDR>` in
-`configs/hydration/core-config.multisig-ism.yaml`, then follow its header workflow
-(`core read` → paste `defaultIsm` block → `core apply` → `core read` to confirm).
-Keep `threshold ≤ M-1` (fewer than total validators) so one can be down.
+`configs/hydration/core-config.multisig-ism.yaml`, then follow its header workflow — critically, pass
+`--config /tmp/hydration-core.yaml` on **both** `core read` and `core apply`. A bare `core apply`
+reads the default `./configs/core-config.yaml`, not your edit, so it silently applies nothing (treat
+`"No updates needed"` as a red flag). Keep `threshold ≤ M-1` (fewer than total validators) so one can be down.
 
 ### 4d — transfer ownership to a Safe
 
 Deploy/pick a Safe on Hydration EVM (no Safe Transaction Service there — coordinate signers
 off-chain). Use `configs/hydration/core-config.safe-owner.yaml` — it lists **every** owner field
-including `interchainAccountRouter` and its ISM owners; missing one leaves the deployer EOA
-privileged. `core apply` is the deployer's last signed action.
+including `interchainAccountRouter` and its ISM owners (and the `requiredHook.beneficiary`); missing
+one leaves the deployer EOA privileged. Same `--config /tmp/hydration-core.yaml`-on-read-and-apply
+rule as 4c (a bare `core apply` no-ops). This is the deployer's last **core** action — but the warp
+route stays EOA-owned until 4f, so **do not retire the key until 4e/4f are done**.
 
 ### 4e — strip trustedRelayerIsm from the warp route
 
@@ -178,13 +233,15 @@ warp config precisely so it's part of this handover).
 
 ## Phase 5 — canonical registry PR (the "supported chains" listing)
 
-Gate: working deployment + smoke test, and the explorer `apiUrl` TODO resolved.
+Gate: working deployment + smoke test. (Explorer is set to Subscan; no apiUrl blocker.)
 
 ```bash
-gh repo fork hyperlane-xyz/hyperlane-registry --clone
-cd hyperlane-registry
+DEPLOY_REPO="$(pwd)"   # run from the hyperlane-deploy repo root
+gh repo fork hyperlane-xyz/hyperlane-registry --clone -- ../hyperlane-registry
+cd ../hyperlane-registry
 mkdir -p chains/hydration
-cp ../hyperlane-deploy/chains/hydration/{metadata.yaml,addresses.yaml,logo.svg} chains/hydration/
+cp "$DEPLOY_REPO"/chains/hydration/{metadata.yaml,addresses.yaml,logo.svg} chains/hydration/
+yarn install            # the changeset binary isn't present until deps are installed
 yarn changeset add
 git checkout -b add-hydration
 git add . && git commit -m "Add hydration chain" && git push -u origin add-hydration
@@ -219,6 +276,7 @@ submit-queue backlog, and sync stalls — **wire an Alertmanager or nothing page
 | `insufficient funds for gas` | Deployer needs WETH on Hydration (and ETH on the destination for `--relay`) |
 | Deploy hangs at a contract | RPC flake — CLI rotates through `rpcUrls` in order; reorder in metadata.yaml |
 | Smoke message stays pending | Ephemeral relayer needs gas on **both** chains |
-| `max fee per gas less than block base fee` | Base fee spiked past the 3 gwei cap in metadata `transactionOverrides` — raise it |
+| `max fee per gas less than block base fee` | Base fee exceeded the 15 gwei cap in metadata `transactionOverrides` (runtime max ≈14.4 gwei, so this should not happen — check the runtime's fee params changed) |
+| Deploy rejected at gas estimation (before any tx is sent; a `pallet-evm-accounts` error such as `AddressNotWhitelisted` — confirm the exact string against a rejected deploy) | `HYP_KEY` isn't the whitelisted deployer key (wrong address, or not on the `ContractDeployer` allowlist — add via `add_contract_deployer`) |
 | Relayer ignores checkpoints | Not sharing the validators' volume, or `--allowLocalCheckpointSyncers` not `true` |
 | YAML schema validation error | `hyperlane registry list -r .` from repo root surfaces the failing field |

@@ -1,5 +1,5 @@
 # Hydration mainnet — INITIAL core deploy config (Phase 1).
-# Input to:  hyperlane core deploy --chain hydration
+# Input to:  hyperlane core deploy --chain hydration --config configs/hydration/core-config.initial.yaml
 #
 # Intentionally matches the testnet posture: single-EOA owner + trustedRelayerIsm.
 # This is INSECURE by design and is hardened later:

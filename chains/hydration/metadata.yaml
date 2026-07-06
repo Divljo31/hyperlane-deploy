@@ -3,10 +3,15 @@
 # Scaffolded from chains/lark/metadata.yaml (the testnet dress-rehearsal).
 # Live-verified 2026-07-02: chainId 0x3640e (222222) via eth_chainId on both RPCs below.
 blockExplorers:
-  - apiUrl: https://explorer.evm.hydration.cloud/api   # TODO: confirm before registry PR — front-end is Blockscout but /api and /api/v2 404'd in probes
-    family: blockscout
-    name: Hydration EVM Explorer
-    url: https://explorer.evm.hydration.cloud
+  # Subscan is Hydration's canonical explorer (Substrate + EVM). family "other": Subscan's API is
+  # not Etherscan/Blockscout-compatible and requires an API key (set apiKey), so Hyperlane tooling
+  # won't auto-verify contracts through it — the human-facing url works. If EVM contract verification
+  # is needed later, ask infra to expose the Blockscout API at explorer.evm.hydration.cloud and add
+  # a second entry with family: blockscout.
+  - apiUrl: https://hydration.api.subscan.io/api
+    family: other
+    name: Subscan
+    url: https://hydration.subscan.io
 blocks:
   confirmations: 1
   estimateBlockTime: 6
@@ -36,7 +41,8 @@ technicalStack: polkadotsubstrate
 transactionOverrides:
   # Verified against mainnet 2026-07-02: eth_gasPrice ≈ 0.0041 gwei, eth_maxPriorityFeePerGas 0.
   # maxFeePerGas is a hard cap (SDK overrides replace fee estimation — no escalation past it).
-  # With priority fee 0 the sender only ever pays base fee, so a high cap costs nothing extra;
-  # 3 gwei ≈ 700x observed base fee, vs Lark's 0.03 gwei which left only ~7x headroom.
-  maxFeePerGas: 3000000000
+  # Runtime's pallet-dynamic-evm-fee clamps base fee to [1500000 wei, ~14.4 gwei], so the cap must
+  # cover 14.4 gwei or a fee spike strands txs mid-deploy. With priority fee 0 the sender only
+  # ever pays base fee, so the high cap costs nothing extra.
+  maxFeePerGas: 15000000000
   maxPriorityFeePerGas: 0

@@ -39,7 +39,7 @@ groups:
       - alert: HyperlaneValidatorCheckpointStalled
         expr: >
           increase(hyperlane_latest_checkpoint{phase="validator_observed"}[15m]) > 0
-          and increase(hyperlane_latest_checkpoint{phase="validator_processed"}[15m]) == 0
+          and ignoring(phase) increase(hyperlane_latest_checkpoint{phase="validator_processed"}[15m]) == 0
         for: 15m
         labels: { severity: critical }
         annotations:
