@@ -44,10 +44,19 @@ rate-limits and will stall.
 
 **Tooling** — Node.js LTS, `git`. Install the CLI in Step 1.
 
-**Fill the config placeholders** (for a deploy + smoke done by one person, set the owner/relayer fields to the
-**deployer address** — the real relayer/Safe are set during hardening, which replaces these ISMs anyway):
-- [ ] [`configs/hydration/core-config.initial.yaml`](configs/hydration/core-config.initial.yaml): set
-      `<DEPLOYER_EOA>` and `<RELAYER_EOA>` **both to the deployer address**. Leave `protocolFee: 0`.
+**Fill the config placeholders — the only pre-deploy edit.** In
+[`configs/hydration/core-config.initial.yaml`](configs/hydration/core-config.initial.yaml), replace **every**
+`<DEPLOYER_EOA>` (4 spots: `owner`, `requiredHook.owner`, `requiredHook.beneficiary`, `proxyAdmin.owner`)
+**and** `<RELAYER_EOA>` (1 spot: `defaultIsm.relayer`). For a one-person deploy + smoke, **paste the deployer
+address into all 5**. Leave `protocolFee: 0`. (The production relayer/Safe are set during hardening, which
+replaces these ISMs anyway.)
+
+> **Nothing else needs an address before deploying.** `core deploy` *writes* the contract addresses to
+> `chains/hydration/addresses.yaml` (Step 2). The agent config's zero-address fields (`mailbox`,
+> `merkleTreeHook`, `validatorAnnounce`, `index.from` in `configs/agent-config.mainnet.json`) are backfilled
+> from that file during the **agents/hardening follow-on** — and `interchainGasPaymaster` **stays `0x0`** (no
+> IGP is deployed). Validator addresses (multisig ISM) and the Safe address come later too. So for *this*
+> hand-off, the deployer address is the only value you enter by hand.
 
 ---
 
